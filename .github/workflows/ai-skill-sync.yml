@@ -50,12 +50,14 @@ jobs:
           if-no-files-found: ignore
 
       - name: Open PR for refreshed files
+        id: open-pr
         if: inputs.mode == 'refresh'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -z "$(git status --porcelain)" ]; then
             echo "No changes to commit — adapters already in sync."
+            echo "pr_url=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -75,9 +77,52 @@ jobs:
 
           PR_BODY="## AI Skill Sync\n\nAutomated refresh of derived AI control files from the canonical project spec.\n\n### Refreshed files\n${REFRESHED}\n\n### Report\nDownload the \`ai-skill-sync-report\` artifact for the full JSON report."
 
-          gh pr create \
+          PR_URL=$(gh pr create \
             --title "chore: AI control layer sync" \
             --body "$(printf '%b' "$PR_BODY")" \
             --label "ai-sync" \
             --head "$BRANCH" \
-            --base main || true
+            --base main 2>/dev/null || true)
+
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Write job summary
+        if: always()
+        run: |
+          REPORT_JSON=".ai/skills/reports/ai-skill-sync-report.json"
+          DRIFT="unknown"
+          ERRORS=0
+          WARNINGS=0
+          CHECKS_PASSED=0
+          CHECKS_TOTAL=0
+          REFRESHED_COUNT=0
+
+          if [ -f "$REPORT_JSON" ]; then
+            DRIFT=$(node -e "const r=JSON.parse(require('fs').readFileSync('$REPORT_JSON','utf8')); console.log(r.driftDetected)" 2>/dev/null || echo "unknown")
+            ERRORS=$(node -e "const r=JSON.parse(require('fs').readFileSync('$REPORT_JSON','utf8')); console.log(r.errors.length)" 2>/dev/null || echo 0)
+            WARNINGS=$(node -e "const r=JSON.parse(require('fs').readFileSync('$REPORT_JSON','utf8')); console.log(r.warnings.length)" 2>/dev/null || echo 0)
+            CHECKS_PASSED=$(node -e "const r=JSON.parse(require('fs').readFileSync('$REPORT_JSON','utf8')); console.log(r.checks.filter(c=>c.passed).length)" 2>/dev/null || echo 0)
+            CHECKS_TOTAL=$(node -e "const r=JSON.parse(require('fs').readFileSync('$REPORT_JSON','utf8')); console.log(r.checks.length)" 2>/dev/null || echo 0)
+            REFRESHED_COUNT=$(node -e "const r=JSON.parse(require('fs').readFileSync('$REPORT_JSON','utf8')); console.log(r.refreshedFiles.length)" 2>/dev/null || echo 0)
+          fi
+
+          DRIFT_ICON="✅"
+          [ "$DRIFT" = "true" ] && DRIFT_ICON="⚠️"
+          [ "$ERRORS" -gt 0 ] 2>/dev/null && DRIFT_ICON="❌"
+
+          {
+            echo "## $DRIFT_ICON AI Skill Sync"
+            echo ""
+            echo "| Field | Value |"
+            echo "| ----- | ----- |"
+            echo "| Mode | \`${{ inputs.mode }}\` |"
+            echo "| Target models | \`${{ inputs.target_models }}\` |"
+            echo "| Drift detected | \`$DRIFT\` |"
+            echo "| Checks passed | \`$CHECKS_PASSED / $CHECKS_TOTAL\` |"
+            echo "| Errors | \`$ERRORS\` |"
+            echo "| Warnings | \`$WARNINGS\` |"
+            echo "| Files refreshed | \`$REFRESHED_COUNT\` |"
+            if [ -n "${{ steps.open-pr.outputs.pr_url }}" ]; then
+              echo "| Pull request | ${{ steps.open-pr.outputs.pr_url }} |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
