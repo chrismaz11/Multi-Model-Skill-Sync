@@ -1,0 +1,39 @@
+name: ai-skill-sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_models:
+        description: "comma-separated model adapters to refresh"
+        required: false
+        default: "openai,claude,gemini"
+      mode:
+        description: "validate or refresh"
+        required: false
+        default: "validate"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate canonical spec exists
+        run: |
+          test -f .ai/skills/project-spec.md
+
+      - name: Validate adapter metadata
+        run: |
+          echo "add repo-specific validation here"
+
+      - name: Report mode
+        if: ${{ inputs.mode == 'validate' }}
+        run: |
+          echo "compare canonical spec version with adapter versions"
+          echo "fail or report when drift is detected"
+
+      - name: Refresh mode
+        if: ${{ inputs.mode == 'refresh' }}
+        run: |
+          echo "regenerate adapters from canonical spec using your chosen tooling"
+          echo "open a patch or PR-ready diff instead of silently mutating unexpected files"

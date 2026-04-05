@@ -1,0 +1,14 @@
+{
+  "name": "cross-model-skill-sync-action",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GitHub Action and local utility for validating and refreshing repo-resident AI control files.",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "skill-sync:validate": "node ./cross-model-skill-sync/scripts/sync.js --repo-root . --mode validate --target-models openai,claude,gemini --fail-on-drift true",
+    "skill-sync:refresh": "node ./cross-model-skill-sync/scripts/sync.js --repo-root . --mode refresh --target-models openai,claude,gemini --fail-on-drift true"
+  }
+}
