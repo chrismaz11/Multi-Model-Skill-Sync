@@ -70,20 +70,11 @@ jobs:
             console.log(r.refreshedFiles.map(f => '- \`' + f + '\`').join('\n') || '_none_');
           " 2>/dev/null || echo "_unknown_")
 
+          PR_BODY="## AI Skill Sync\n\nAutomated refresh of derived AI control files from the canonical project spec.\n\n### Refreshed files\n${REFRESHED}\n\n### Report\nDownload the \`ai-skill-sync-report\` artifact for the full JSON report."
+
           gh pr create \
             --title "chore: AI control layer sync" \
-            --body "$(cat <<EOF
-## AI Skill Sync
-
-Automated refresh of derived AI control files from the canonical project spec.
-
-### Refreshed files
-$REFRESHED
-
-### Report
-Download the \`ai-skill-sync-report\` artifact for the full JSON report.
-EOF
-)" \
+            --body "$(printf '%b' "$PR_BODY")" \
             --label "ai-sync" \
             --head "$BRANCH" \
             --base main || true
