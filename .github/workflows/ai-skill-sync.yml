@@ -1,0 +1,89 @@
+name: AI Skill Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "validate or refresh"
+        required: false
+        default: "validate"
+        type: choice
+        options:
+          - validate
+          - refresh
+      target_models:
+        description: "Comma-separated model adapters to sync"
+        required: false
+        default: "openai,claude,gemini"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run AI skill sync
+        id: sync
+        uses: ./
+        with:
+          mode: ${{ inputs.mode }}
+          target-models: ${{ inputs.target_models }}
+          fail-on-drift: ${{ inputs.mode == 'validate' && 'true' || 'false' }}
+
+      - name: Upload sync report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-skill-sync-report
+          path: .ai/skills/reports/ai-skill-sync-report.json
+          if-no-files-found: ignore
+
+      - name: Open PR for refreshed files
+        if: inputs.mode == 'refresh'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit — adapters already in sync."
+            exit 0
+          fi
+
+          BRANCH="ai-skill-sync/refresh-$(date +%Y%m%d-%H%M%S)"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add .ai/ .agents/
+          git commit -m "chore: AI control layer sync"
+          git push origin "$BRANCH"
+
+          REPORT_JSON=".ai/skills/reports/ai-skill-sync-report.json"
+          REFRESHED=$(node -e "
+            const r = JSON.parse(require('fs').readFileSync('$REPORT_JSON','utf8'));
+            console.log(r.refreshedFiles.map(f => '- \`' + f + '\`').join('\n') || '_none_');
+          " 2>/dev/null || echo "_unknown_")
+
+          gh pr create \
+            --title "chore: AI control layer sync" \
+            --body "$(cat <<EOF
+## AI Skill Sync
+
+Automated refresh of derived AI control files from the canonical project spec.
+
+### Refreshed files
+$REFRESHED
+
+### Report
+Download the \`ai-skill-sync-report\` artifact for the full JSON report.
+EOF
+)" \
+            --label "ai-sync" \
+            --head "$BRANCH" \
+            --base main || true
