@@ -1,42 +1,81 @@
-# Cross Model Skill Sync Action
+# Cross Model Skill Sync
 
-This repository packages the `cross-model-skill-sync` skill as a runnable GitHub Action.
+`cross-model-skill-sync` is a composite GitHub Action that validates and refreshes a repo-resident AI control layer from a canonical project spec.
 
-The action treats `.ai/skills/project-spec.md` as the canonical source of truth and manages thin adapter files for `openai`, `claude`, and `gemini`, plus agent policy documents under `.agents/`.
+It treats `.ai/skills/project-spec.md` as the source of truth and manages:
+
+- model adapters under `.ai/skills/<model>/`
+- governance artifacts under `.ai/skills/governance/`
+- agent policies under `.agents/`
 
 ## What it does
 
-- validates canonical AI control metadata
-- detects version drift between the canonical spec and derived adapters
-- refreshes derived adapter and agent files in a deterministic way
-- refreshes governance artifacts used for approval and review
-- emits a JSON report that can be uploaded as a workflow artifact
+- validates canonical metadata and required governance sections
+- detects drift between the canonical spec and derived artifacts
+- refreshes missing or stale adapters, governance docs, and agent policies
+- writes a JSON report for downstream workflows or PR bodies
 
-## Repository layout
+## Inputs
 
-- `.ai/skills/project-spec.md`: canonical source of truth
-- `.ai/skills/governance/`: approval, risk, drift, and review policy pack
-- `.ai/skills/<model>/adapter.md`: derived model adapters
-- `.agents/primary-agent.md`: main decision policy
-- `.agents/executor-agent.md`: bounded execution policy
-- `cross-model-skill-sync/action.yml`: composite GitHub Action
-- `cross-model-skill-sync/scripts/sync.js`: sync and drift-check implementation
-- `.github/workflows/ai-skill-sync.yml`: manual trigger example workflow
+- `repo-root`: repository root to manage. Default: `.`
+- `target-models`: comma-separated adapters to manage. Default: `openai,claude,gemini`
+- `mode`: `validate` or `refresh`. Default: `validate`
+- `fail-on-drift`: whether validate mode should fail on drift. Default: `true`
+- `report-path`: JSON report output path relative to the managed repo. Default: `.ai/skills/reports/ai-skill-sync-report.json`
 
-## Local usage
+## Outputs
 
-```bash
-npm run skill-sync:validate
-npm run skill-sync:refresh
-```
+- `drift-detected`: `true` when missing or stale derived files were detected
+- `report-path`: absolute path to the generated JSON report
 
-## GitHub Action usage
+## Example
 
 ```yaml
-- uses: ./cross-model-skill-sync
-  with:
-    mode: validate
-    target-models: openai,claude,gemini
+name: ai-skill-sync
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: chrismaz11/Multi-Model-Skill-Sync@v1
+        with:
+          repo-root: .
+          mode: validate
+          target-models: openai,claude,gemini
 ```
 
-Use the example workflow in `.github/workflows/ai-skill-sync.yml` for a manual `workflow_dispatch` entrypoint.
+## Managed file contract
+
+The target repository is expected to contain:
+
+- `.ai/skills/project-spec.md`
+- `.ai/skills/change-log.md`
+- `.agents/primary-agent.md`
+- `.agents/executor-agent.md`
+
+In `refresh` mode, this action will create or replace derived files under:
+
+- `.ai/skills/openai/`
+- `.ai/skills/claude/`
+- `.ai/skills/gemini/`
+- `.ai/skills/governance/`
+- `.agents/`
+
+## Publishing
+
+Marketplace publication requires:
+
+- a public repository
+- `action.yml` at repository root
+- no workflow files in that repository
+
+Use `PUBLISHING.md` as the release checklist for this repository.

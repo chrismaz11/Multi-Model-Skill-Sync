@@ -1,0 +1,48 @@
+name: "Cross Model Skill Sync"
+description: "Validate and refresh repo-resident AI control files from a canonical project spec."
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  repo-root:
+    description: "Repository root to manage."
+    required: false
+    default: "."
+  target-models:
+    description: "Comma-separated model adapters to validate or refresh."
+    required: false
+    default: "openai,claude,gemini"
+  mode:
+    description: "Operation mode: validate or refresh."
+    required: false
+    default: "validate"
+  fail-on-drift:
+    description: "Fail the action when drift is detected."
+    required: false
+    default: "true"
+  report-path:
+    description: "Path to write the JSON report to, relative to the repository root."
+    required: false
+    default: ".ai/skills/reports/ai-skill-sync-report.json"
+
+outputs:
+  drift-detected:
+    description: "Whether any drift or missing derived files were detected."
+    value: ${{ steps.sync.outputs.drift-detected }}
+  report-path:
+    description: "Absolute path to the generated JSON report."
+    value: ${{ steps.sync.outputs.report-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: sync
+      shell: bash
+      run: |
+        node "${{ github.action_path }}/scripts/sync.js" \
+          --repo-root "${{ inputs.repo-root }}" \
+          --mode "${{ inputs.mode }}" \
+          --target-models "${{ inputs.target-models }}" \
+          --fail-on-drift "${{ inputs.fail-on-drift }}" \
+          --report-path "${{ inputs.report-path }}"
