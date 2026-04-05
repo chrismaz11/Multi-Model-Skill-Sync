@@ -70,12 +70,3 @@ In `refresh` mode, this action will create or replace derived files under:
 - `.ai/skills/governance/`
 - `.agents/`
 
-## Publishing
-
-Marketplace publication requires:
-
-- a public repository
-- `action.yml` at repository root
-- no workflow files in that repository
-
-Use `PUBLISHING.md` as the release checklist for this repository.
